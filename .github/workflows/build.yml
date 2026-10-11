@@ -1,0 +1,60 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write # only used by the release step on tags
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Test
+        run: dotnet test tests/StartBarController.Core.Tests -c Release
+
+      - name: Publish (self-contained, no .NET install needed)
+        run: >
+          dotnet publish src/StartBarController.App -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
+          -o out/standalone
+
+      - name: Publish (small, needs .NET 8 Desktop Runtime)
+        run: >
+          dotnet publish src/StartBarController.App -c Release -r win-x64 --self-contained false
+          -p:PublishSingleFile=true -p:DebugType=none
+          -o out/framework-dependent
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StartBarController-win-x64
+          path: out/standalone/StartBarController.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StartBarController-win-x64-framework-dependent
+          path: out/framework-dependent/StartBarController.exe
+
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Copy-Item out/framework-dependent/StartBarController.exe out/StartBarController-small.exe
+          gh release create "${{ github.ref_name }}" out/standalone/StartBarController.exe out/StartBarController-small.exe `
+            --title "${{ github.ref_name }}" --generate-notes

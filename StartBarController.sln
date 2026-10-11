@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{AC2EBE22-BEA3-4BB2-A939-B69804D5DE22}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StartBarController.Core", "src\StartBarController.Core\StartBarController.Core.csproj", "{9A681956-FD15-456A-B48E-D5BF6206309E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{EF6B2632-44B5-41E8-8A79-4A773B13AD95}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StartBarController.Core.Tests", "tests\StartBarController.Core.Tests\StartBarController.Core.Tests.csproj", "{75E91043-6232-4F67-B38A-21EB0B15A512}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9A681956-FD15-456A-B48E-D5BF6206309E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9A681956-FD15-456A-B48E-D5BF6206309E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9A681956-FD15-456A-B48E-D5BF6206309E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A681956-FD15-456A-B48E-D5BF6206309E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{75E91043-6232-4F67-B38A-21EB0B15A512}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{75E91043-6232-4F67-B38A-21EB0B15A512}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{75E91043-6232-4F67-B38A-21EB0B15A512}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{75E91043-6232-4F67-B38A-21EB0B15A512}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{9A681956-FD15-456A-B48E-D5BF6206309E} = {AC2EBE22-BEA3-4BB2-A939-B69804D5DE22}
+		{75E91043-6232-4F67-B38A-21EB0B15A512} = {EF6B2632-44B5-41E8-8A79-4A773B13AD95}
+	EndGlobalSection
+EndGlobal
