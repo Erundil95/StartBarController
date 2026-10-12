@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      print_screenshots:
+        description: Also print the smoke-test screenshots into the log (base64), for environments that can't download artifacts
+        type: boolean
+        default: false
 
 permissions:
   contents: write # only used by the release step on tags
@@ -51,6 +56,17 @@ jobs:
           if (Test-Path "$folder/error.txt") { Get-Content "$folder/error.txt"; throw "The app failed the smoke test." }
           if ($p.ExitCode -ne 0) { throw "Smoke test exit code $($p.ExitCode)" }
           Get-ChildItem $folder
+
+      - name: Print screenshots
+        if: inputs.print_screenshots
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem out/smoke/*.png) {
+            $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
+            Write-Output "BEGIN-SCREENSHOT $($file.Name)"
+            for ($i = 0; $i -lt $b64.Length; $i += 4000) { Write-Output ("B64 " + $b64.Substring($i, [Math]::Min(4000, $b64.Length - $i))) }
+            Write-Output "END-SCREENSHOT $($file.Name)"
+          }
 
       - name: Command line
         shell: pwsh
