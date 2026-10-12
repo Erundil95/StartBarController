@@ -1,137 +1,119 @@
 # Start Bar Controller
 
-A small Windows app for customizing the taskbar. Its main job is moving the taskbar to the
-**top, left, right or bottom** of the screen, with the **start menu following it**, on
-Windows 11, where Microsoft removed that option.
+Move the Windows taskbar to the **top, left, right or bottom** of the screen, with the start
+menu following it, and adjust the rest of the taskbar from one place. On Windows 11 it keeps
+the **real Windows 11 taskbar and start menu**.
 
-![Main window (captured under Wine, so the styling differs from real Windows)](docs/screenshot.png)
+![Position page](docs/position.png)
 
-## What it can do (v0.1 MVP)
+## What it does
 
-| Feature | How |
-|---|---|
-| Move the taskbar to any edge | Windows 10: natively. Windows 11: through [ExplorerPatcher](https://github.com/valinet/ExplorerPatcher) (see below) |
-| Start menu follows the taskbar | ExplorerPatcher's Windows 10 start menu, which opens next to the taskbar on every edge |
-| Icon alignment (left / center) | Native Windows 11 setting; applies immediately |
-| Auto-hide the taskbar | Win32 `SHAppBarMessage`; applies immediately |
-| Restore original | Every value is backed up before the first change, and **Restore original** puts it back |
-| Command line | `StartBarController --edge top`, etc. (see below) |
+- **Taskbar position:** pick an edge, or click one on the preview. On Windows 11 the taskbar
+  and start menu keep their Windows 11 look.
+- **Layout for moved taskbars:** vertical taskbar width, where the start menu and jump lists
+  open along a side taskbar, running indicators on top, start menu animation.
+- **Taskbar settings:** alignment, auto-hide, Search, Task view, combine buttons (main and
+  other monitors), seconds in the clock, badges, flashing, "End task" in the right-click menu.
+- **Notification-area icon:** right-click to move the taskbar in one click. It can start
+  with Windows.
+- **Restore original:** every value the app changes is backed up first. *Settings → Restore*
+  (or uninstalling) puts it all back.
+- **Light and dark mode:** follows Windows, using the Windows 11 (Fluent) style.
+- **Command line:** `StartBarController --edge top`, and more (see below).
 
-No administrator rights needed: everything it changes is in `HKEY_CURRENT_USER`.
+## How the taskbar is moved
 
-## Why Windows 11 needs ExplorerPatcher
+Windows 11 has no supported setting for moving its taskbar (Microsoft is testing one in
+Insider preview builds). So the app has three engines, and **Automatic** picks the right one:
 
-Windows 11 replaced the taskbar with a new one that only supports the bottom edge:
-
-| Windows version | Bottom | Top | Left / Right |
+| Engine | Look | Edges | Notes |
 |---|---|---|---|
-| Windows 10 | ✅ | ✅ native | ✅ native |
-| Windows 11 21H2 (build 22000) | ✅ | ⚠️ native, but the start menu and flyouts still open at the bottom | ❌ needs ExplorerPatcher |
-| Windows 11 22H2, 23H2, 24H2 and later | ✅ | ❌ needs ExplorerPatcher | ❌ needs ExplorerPatcher |
+| **Windhawk** (default on Windows 11) | Windows 11 taskbar and start menu | all four | Uses two free, open-source [Windhawk](https://windhawk.net) mods by m417z: *Taskbar on top for Windows 11* and *Vertical Taskbar for Windows 11*. Changes apply in seconds, no Explorer restart. The mods use Windows' own position support on builds that have it. |
+| **ExplorerPatcher** | Windows 10 taskbar | all four | [ExplorerPatcher](https://github.com/valinet/ExplorerPatcher) swaps in the Windows 10-style taskbar. Its Windows 10 start menu follows the taskbar (not on 24H2 and later). Explorer restarts on each change. |
+| **Windows built-in** | unchanged | all on Windows 10; on Windows 11, only preview builds with the new position feature (21H2: top, partly) | Writes Windows' own setting and restarts Explorer. |
 
-The registry value Explorer uses for the taskbar edge (`StuckRects3`) is still there, but
-from 22H2 on the Windows 11 taskbar ignores it. Making the *native* Windows 11 taskbar dock to
-another edge means injecting code into `explorer.exe` and hooking its internals. That's a large,
-fragile project that breaks with Windows updates, so it's out of scope for this MVP.
+The app sets up the engine for you:
+- **Windhawk not installed:** *Install Windhawk* runs `winget install RamenSoftware.Windhawk`.
+- **A mod missing:** with Windhawk 2.0 (which has `windhawk-cli.exe`) the app installs it
+  automatically. With Windhawk 1.x, install it once from Windhawk's *Explore* page.
+- **Switching engines:** the old engine's changes are undone, so two engines never fight
+  over the taskbar.
+- **Admin rights:** Windhawk keeps its mod settings machine-wide, so changing them asks
+  for permission once (UAC). For that the app starts a short-lived elevated copy of itself,
+  which accepts changes only to those two mods.
 
-Instead the app works with **ExplorerPatcher** (free, open source, widely used). It brings back
-the Windows 10 taskbar, which supports every edge and has a start menu that opens next to it.
-Start Bar Controller detects ExplorerPatcher, sets its taskbar style for you, writes the edge,
-and restarts Explorer. If ExplorerPatcher isn't installed, **Get ExplorerPatcher…** installs it
-with `winget` or opens its download page.
+Limitations to know about:
+- The vertical Windhawk mod doesn't support auto-hide.
+- With the top taskbar, the Action Center (Win+A) may still open at the bottom.
+- After Windows updates, Windhawk mods sometimes need an update. Windhawk handles that itself.
 
-Notes:
-- With ExplorerPatcher, the taskbar looks and behaves like Windows 10's.
-  **Restore original** brings back the Windows 11 taskbar.
-- On Windows 11 24H2 and later the Windows 10 *start menu* no longer exists, so the Windows 11
-  start menu stays. ExplorerPatcher still provides the movable taskbar there (its own
-  "Windows 10 (ExplorerPatcher)" taskbar style, which the app picks automatically).
-- Some antivirus products flag ExplorerPatcher as a false positive.
-- If you'd rather keep the Windows 11 look, the [Windhawk taskbar mods](https://ramensoftware.com/windhawk-mods-for-the-windows-11-taskbar)
-  ("Taskbar on top", "Vertical taskbar") move the native taskbar. As of their last description,
-  the start menu still opens at the bottom with those.
-- **Experimental: force the native registry method** writes the edge even where Windows 11
-  doesn't support it, if you want to see what your build does. Use **Restore original** if the
-  taskbar breaks.
+## Install
 
-## Getting the program (from a Mac or anywhere)
+From the repository's **Actions** tab (latest *Build* run → *Artifacts*), or from *Releases*
+once a version is tagged:
 
-There's no installer. It's one `.exe`.
+- **StartBarController-Setup** is the installer. It installs for the current user without
+  admin rights, adds a Start menu shortcut, and can start with Windows. Uninstalling
+  restores the original taskbar.
+- **StartBarController-portable** is a single `.exe` that runs without installing.
 
-1. On GitHub, open this repo's **Actions** tab → latest **Build** run → *Artifacts*.
-2. Download **StartBarController-win-x64** (self-contained, about 70 MB, runs on any Windows 10/11 x64).
-   **StartBarController-win-x64-framework-dependent** is about 0.2 MB but needs the
-   [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0).
-3. Copy it to the Windows PC and run it. Windows SmartScreen may warn because the exe is
-   unsigned: *More info → Run anyway*.
+Both are self-contained (no .NET install needed) and run on Windows 10 and 11 x64. The files
+aren't code-signed yet, so SmartScreen may warn: *More info → Run anyway*.
 
-Pushing a tag such as `v0.1.0` also publishes both files as a GitHub Release.
-
-## Using it
-
-1. Pick an edge with the **Top / Left / Right / Bottom** buttons. The preview and the text
-   below it show what will happen on your Windows version.
-2. If ExplorerPatcher is driving the taskbar, choose **Start menu style → Windows 10 (follows
-   the taskbar)** so the start menu opens next to it.
-3. Click **Apply position**. Explorer restarts (open File Explorer windows close), and the
-   taskbar comes back on the new edge.
-
-**Restore original** undoes everything this app changed. The backup is stored in
-`%LOCALAPPDATA%\StartBarController\backup.json`.
-
-### Command line
+## Command line
 
 ```
 StartBarController --status
-StartBarController --edge <top|bottom|left|right> [--start-menu <keep|win10|win11>] [--force-native] [--no-restart]
-StartBarController --align <left|center>
+StartBarController --edge <top|bottom|left|right> [--engine <auto|windhawk|explorerpatcher|native>]
+StartBarController --set <setting>=<value> [--set ...]     e.g. --set search=0 --set alignment=0
 StartBarController --autohide <on|off>
-StartBarController --restore [--no-restart]
+StartBarController --restore
+StartBarController --list-settings
+StartBarController --tray                                  start in the notification area
 ```
 
-`--edge`, `--align` and `--autohide` can be combined. The exit code is `1` when the requested
-edge isn't possible on this system, and `2` for bad arguments.
+`--no-restart` skips restarting Explorer for changes that need it. Exit codes: `0` success,
+`1` not possible on this system, `2` bad arguments.
 
 ## How it works
 
-- The taskbar edge is byte 12 of the binary value
-  `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StuckRects3\Settings`
-  (0 = left, 1 = top, 2 = right, 3 = bottom). Each monitor's copy under `MMStuckRects3` is updated too.
-- Explorer only reads it at startup, so the app **kills** Explorer and lets Windows restart it.
-  A clean shutdown would make Explorer save its current position over the new one.
-- ExplorerPatcher settings: `HKCU\Software\ExplorerPatcher\OldTaskbar` (taskbar style) and
-  `HKCU\...\Explorer\Advanced\Start_ShowClassicMode` (start menu style).
-- Icon alignment: `HKCU\...\Explorer\Advanced\TaskbarAl` (and ExplorerPatcher's `OldTaskbarAl`).
+- **Windhawk:** the app finds Windhawk the way Windhawk does (`windhawk.ini`, then the
+  engine's `engine.ini`). It then writes each mod's `Disabled` flag and `Settings`, plus a
+  new `SettingsChangeTime` stamp, under `HKLM\SOFTWARE\Windhawk\Engine\Mods\<mod>` (or the
+  mod's INI file for portable installs). Windhawk watches that storage and reloads the mod.
+- **Windows 10 / ExplorerPatcher:** byte 12 of `HKCU\...\Explorer\StuckRects3\Settings`
+  (and each monitor's copy under `MMStuckRects3`) holds the edge: 0 left, 1 top, 2 right,
+  3 bottom. Explorer reads it only at startup, so the app kills Explorer and lets Windows
+  restart it (a clean exit would save the old position over the new one). ExplorerPatcher's
+  taskbar style is `HKCU\Software\ExplorerPatcher\OldTaskbar`.
+- **Preview builds with native positions:** `HKCU\...\Explorer\Advanced\TaskbarLocation`.
+- **Taskbar settings:** documented per-user values (`TaskbarAl`, `SearchboxTaskbarMode`, …),
+  followed by a `WM_SETTINGCHANGE "TraySettings"` broadcast so Explorer picks them up.
 
-## Building from source
+## Building
 
-Requires the .NET 8 SDK. The Windows app can be compiled on macOS or Linux too
-(`EnableWindowsTargeting` is set), though it only runs on Windows.
+Requires the .NET 10 SDK. The core library and tests build and run on any OS. The app
+targets Windows, but it also compiles on macOS and Linux (`EnableWindowsTargeting`).
 
 ```
 dotnet test tests/StartBarController.Core.Tests
 dotnet publish src/StartBarController.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
+ISCC.exe /DAppVersion=0.9.0 installer\StartBarController.iss     (Inno Setup 6, optional)
 ```
 
-Project layout:
+Layout:
+- `src/StartBarController.Core`: everything that decides what to change. That covers the
+  engines and planner, the Windhawk storage, taskbar settings, backup and restore, and the
+  CLI. It's platform-neutral and covered by xUnit tests in `tests/`.
+- `src/StartBarController.App`: the WPF app (pages, preview, tray icon), the Windows
+  implementations (registry, Explorer, elevation), and `--smoke-test`, which CI uses to open
+  every page and save screenshots.
+- `installer/`: the Inno Setup script.
 
-- `src/StartBarController.Core`: platform-neutral logic. It decides what's possible
-  (`PositionPlanner`), edits `StuckRects3`, handles backup and restore, and parses the command line.
-  Fully unit-tested.
-- `src/StartBarController.App`: the Windows Forms UI plus the Windows-only pieces (registry
-  access, restarting Explorer, auto-hide).
-- `tests/StartBarController.Core.Tests`: xUnit tests that run on any OS against an in-memory registry.
+## Credits
 
-## Ideas for later
-
-- Taskbar size / small icons, combine-buttons mode, hiding Search / Task View / Widgets buttons
-- Per-monitor positions
-- Profiles (save and switch whole taskbar setups), tray icon with quick switching
-- Optional Windhawk integration for keeping the native Windows 11 taskbar
-
-## Disclaimer
-
-This tool edits per-user Explorer settings and restarts Explorer. It's tested against the
-documented behavior and in Wine, but not on every Windows build. If something looks wrong,
-use **Restore original** (or `StartBarController --restore`).
-ExplorerPatcher is a separate project by a different author.
+The Windows 11 taskbar positioning comes from the Windhawk mods *Taskbar on top for
+Windows 11* and *Vertical Taskbar for Windows 11* by [m417z](https://github.com/m417z)
+(GPL-3.0), run by [Windhawk](https://windhawk.net). The Windows 10-style taskbar comes from
+[ExplorerPatcher](https://github.com/valinet/ExplorerPatcher) by valinet. They're separate
+projects, and this app doesn't include their code; it installs and configures them.
