@@ -6,39 +6,55 @@ public class CommandLineTests
     public void NoArgumentsOpensGui() => Assert.Equal(CliAction.Gui, CommandLine.Parse(Array.Empty<string>()).Action);
 
     [Fact]
-    public void ParsesFullEdgeCommand()
+    public void TrayStartsGuiHidden()
     {
-        var o = CommandLine.Parse(new[] { "--edge", "LEFT", "--start-menu", "win10", "--no-restart", "--force-native" });
-        Assert.Equal(CliAction.Apply, o.Action);
-        Assert.Equal(TaskbarEdge.Left, o.Edge);
-        Assert.Equal(StartMenuStyle.Windows10, o.StartMenu);
-        Assert.True(o.NoRestart);
-        Assert.True(o.ForceNative);
-        Assert.Null(o.Error);
+        var o = CommandLine.Parse(new[] { "--tray" });
+        Assert.Equal(CliAction.Gui, o.Action);
+        Assert.True(o.StartInTray);
     }
 
     [Fact]
-    public void ParsesAlignAndAutohide()
+    public void ParsesEdgeEngineSettingsAndAutohide()
     {
-        var o = CommandLine.Parse(new[] { "--align", "center", "--autohide", "on" });
-        Assert.Equal(TaskbarAlignment.Center, o.Alignment);
-        Assert.True(o.AutoHide);
+        var o = CommandLine.Parse(new[] { "--edge", "LEFT", "--engine", "windhawk", "--set", "search=0", "--set", "alignment=1", "--autohide", "off", "--no-restart" });
+        Assert.Equal(CliAction.Apply, o.Action);
+        Assert.Equal(TaskbarEdge.Left, o.Edge);
+        Assert.Equal(PositionEngine.Windhawk, o.Engine);
+        Assert.Equal(2, o.Settings.Count);
+        Assert.Equal(("search", 0), (o.Settings[0].Setting.Id, o.Settings[0].Value));
+        Assert.False(o.AutoHide);
+        Assert.True(o.NoRestart);
+        Assert.Null(o.Error);
     }
 
     [Theory]
     [InlineData("--status", CliAction.Status)]
     [InlineData("--restore", CliAction.Restore)]
+    [InlineData("--list-settings", CliAction.ListSettings)]
     [InlineData("--help", CliAction.Help)]
-    [InlineData("/?", CliAction.Help)]
+    [InlineData("--uninstall", CliAction.Uninstall)]
     public void ParsesSimpleActions(string arg, CliAction expected) =>
         Assert.Equal(expected, CommandLine.Parse(new[] { arg }).Action);
+
+    [Fact]
+    public void ParsesElevatedHelper()
+    {
+        var o = CommandLine.Parse(new[] { "--windhawk-elevated", @"C:\t\r.json" });
+        Assert.Equal(CliAction.WindhawkElevated, o.Action);
+        Assert.Equal(@"C:\t\r.json", o.RequestFile);
+    }
 
     [Theory]
     [InlineData("--edge")]
     [InlineData("--edge", "middle")]
+    [InlineData("--engine", "windhawk")]
+    [InlineData("--set", "search")]
+    [InlineData("--set", "search=7")]
+    [InlineData("--set", "nope=1")]
     [InlineData("--bogus")]
     [InlineData("--no-restart")]
     [InlineData("--restore", "--edge", "top")]
+    [InlineData("--status", "--tray")]
     public void RejectsInvalidInput(params string[] args)
     {
         var o = CommandLine.Parse(args);
@@ -47,46 +63,22 @@ public class CommandLineTests
     }
 
     [Fact]
-    public void RunnerReportsUnsupportedEdgeWithoutChangingAnything()
+    public void RunnerReportsBlockedEdgeWithoutChangingAnything()
     {
         var registry = new FakeRegistry();
         registry.SetBinary(Hive.CurrentUser, RegistryPaths.StuckRects3, RegistryPaths.StuckRects3Value, Samples.StuckRectsBottom());
         var shell = new FakeShell();
-        var controller = new TaskbarController(registry, shell, new MemoryBackupStore(),
-            new SystemInspector(registry, _ => false, Array.Empty<string>()), 22631);
+        var controller = new TaskbarController(
+            new SystemInspector(registry, _ => false, Array.Empty<string>(), () => null,
+                s => new Windhawk.WindhawkModStore(s, registry, new FakeIni()), Samples.Win11_23H2),
+            registry, shell, new JsonFile<TaskbarBackup>(Path.Combine(Path.GetTempPath(), $"sbc-{Guid.NewGuid():N}.json")),
+            new DirectWindhawkExecutor(s => new Windhawk.WindhawkModStore(s, registry, new FakeIni()), new FakeProcessRunner()));
         var output = new StringWriter();
 
-        int code = CliRunner.Run(CommandLine.Parse(new[] { "--edge", "top", "--autohide", "on" }), controller, output);
+        int code = CliRunner.Run(CommandLine.Parse(new[] { "--edge", "top", "--autohide", "on" }), controller, new AppSettings(), output);
 
         Assert.Equal(1, code);
-        Assert.Contains("ExplorerPatcher", output.ToString());
+        Assert.Contains("Windhawk", output.ToString());
         Assert.False(shell.AutoHide);
-        Assert.Null(registry.GetDword(Hive.CurrentUser, RegistryPaths.Advanced, RegistryPaths.TaskbarAl));
-    }
-
-    [Fact]
-    public void JsonBackupStoreRoundTrips()
-    {
-        string path = Path.Combine(Path.GetTempPath(), $"sbc-{Guid.NewGuid():N}", "backup.json");
-        var store = new JsonFileBackupStore(path);
-        Assert.Null(store.Load());
-
-        store.Save(new TaskbarBackup
-        {
-            WindowsBuild = 22631,
-            StuckRects3 = Samples.StuckRectsBottom(),
-            MMStuckRects3 = { ["MON1"] = new byte[] { 1, 2, 3 } },
-            TaskbarAl = 0,
-        });
-        var loaded = store.Load()!;
-
-        Assert.Equal(Samples.StuckRectsBottom(), loaded.StuckRects3);
-        Assert.Equal(new byte[] { 1, 2, 3 }, loaded.MMStuckRects3["MON1"]);
-        Assert.Equal(0, loaded.TaskbarAl);
-        Assert.Null(loaded.OldTaskbar);
-
-        store.Delete();
-        Assert.Null(store.Load());
-        Directory.Delete(Path.GetDirectoryName(path)!);
     }
 }

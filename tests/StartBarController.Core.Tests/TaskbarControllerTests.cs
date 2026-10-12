@@ -1,147 +1,175 @@
+using StartBarController.Core.Windhawk;
+
 namespace StartBarController.Core.Tests;
 
-public class TaskbarControllerTests
+public class TaskbarControllerTests : IDisposable
 {
-    private const int Win11_23H2 = 22631;
-
     private readonly FakeRegistry _registry = new();
+    private readonly FakeIni _ini = new();
     private readonly FakeShell _shell = new();
-    private readonly MemoryBackupStore _backups = new();
-    private bool _epFolder;
+    private readonly FakeProcessRunner _processes = new();
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), $"sbc-{Guid.NewGuid():N}");
+    private readonly WindhawkInstallation _windhawk = Samples.Windhawk(cli: true);
+    private bool _windhawkInstalled = true;
+    private int _build = Samples.Win11_23H2;
 
     public TaskbarControllerTests()
     {
         _registry.SetBinary(Hive.CurrentUser, RegistryPaths.StuckRects3, RegistryPaths.StuckRects3Value, Samples.StuckRectsBottom());
-        _registry.SetBinary(Hive.CurrentUser, RegistryPaths.MMStuckRects3, "MON1", Samples.StuckRectsBottom());
+        _registry.SetBinary(Hive.CurrentUser, RegistryPaths.MMStuckRects3, "MON2", Samples.StuckRectsBottom());
     }
 
-    private TaskbarController Controller(int build = Win11_23H2) => new(
-        _registry, _shell, _backups,
-        new SystemInspector(_registry, _ => _epFolder, new[] { @"C:\Program Files\ExplorerPatcher" }),
-        build);
-
-    private TaskbarEdge? Edge(string key, string name) => StuckRects.ReadEdge(_registry.GetBinary(Hive.CurrentUser, key, name));
-
-    [Fact]
-    public void InspectDetectsExplorerPatcherFromFolder()
+    public void Dispose()
     {
-        Assert.False(Controller().Inspect().ExplorerPatcherInstalled);
-        _epFolder = true;
-        Assert.True(Controller().Inspect().ExplorerPatcherInstalled);
+        if (Directory.Exists(_dir))
+        {
+            Directory.Delete(_dir, recursive: true);
+        }
     }
 
-    [Fact]
-    public void InspectDetectsExplorerPatcherFromUninstallEntry()
-    {
-        _registry.SetString(Hive.LocalMachine, RegistryPaths.Uninstall + @"\{ABC}", "DisplayName", "ExplorerPatcher");
-        Assert.True(Controller().Inspect().ExplorerPatcherInstalled);
-    }
+    private WindhawkModStore Store(WindhawkStorage storage) => new(storage, _registry, _ini);
+
+    private TaskbarController Controller() => new(
+        new SystemInspector(_registry, _ => false, Array.Empty<string>(), () => _windhawkInstalled ? _windhawk : null, Store, _build),
+        _registry,
+        _shell,
+        new JsonFile<TaskbarBackup>(Path.Combine(_dir, "backup.json")),
+        new DirectWindhawkExecutor(Store, _processes));
+
+    private string ModKey(string id) => _windhawk.Storage.ModRegistryKey(id);
+
+    private void InstallMod(string id, bool enabled) =>
+        _registry.SetDword(Hive.LocalMachine, ModKey(id), "Disabled", enabled ? 0 : 1);
+
+    private void MarkInstalled(string id) => _registry.SetString(Hive.LocalMachine, ModKey(id), "LibraryFileName", id + ".dll");
 
     [Fact]
-    public void InspectReadsEdgeAndAlignment()
+    public void WindhawkTopInstallsConfiguresAndEnablesWithoutRestart()
     {
-        _registry.SetDword(Hive.CurrentUser, RegistryPaths.Advanced, RegistryPaths.TaskbarAl, 0);
-        var snapshot = Controller().Inspect();
-        Assert.Equal(TaskbarEdge.Bottom, snapshot.CurrentEdge);
-        Assert.Equal(TaskbarAlignment.Left, snapshot.CurrentAlignment);
-    }
-
-    [Fact]
-    public void ApplyWithExplorerPatcherWritesEdgesStyleAndRestarts()
-    {
-        _epFolder = true;
+        // The fake CLI "installs" the mod by writing its library name, like Windhawk would.
+        _processes.Handler = (_, args) =>
+        {
+            MarkInstalled(args[2]);
+            InstallMod(args[2], enabled: false);
+            return new ProcessResult(0, "");
+        };
         var controller = Controller();
-        var plan = controller.Plan(new PositionRequest(TaskbarEdge.Top, StartMenuStyle.Windows10));
 
-        controller.Apply(plan);
-
-        Assert.Equal(TaskbarEdge.Top, Edge(RegistryPaths.StuckRects3, RegistryPaths.StuckRects3Value));
-        Assert.Equal(TaskbarEdge.Top, Edge(RegistryPaths.MMStuckRects3, "MON1"));
-        Assert.Equal(1, _registry.GetDword(Hive.CurrentUser, RegistryPaths.ExplorerPatcher, RegistryPaths.OldTaskbar));
-        Assert.Equal(1, _registry.GetDword(Hive.CurrentUser, RegistryPaths.Advanced, RegistryPaths.StartShowClassicMode));
-        Assert.Equal(1, _shell.Restarts);
-        Assert.NotNull(_backups.Backup);
-    }
-
-    [Fact]
-    public void ApplyRefusesUnsupportedPlan()
-    {
-        var controller = Controller();
-        var plan = controller.Plan(new PositionRequest(TaskbarEdge.Left));
-        Assert.Throws<InvalidOperationException>(() => controller.Apply(plan));
-        Assert.Equal(TaskbarEdge.Bottom, Edge(RegistryPaths.StuckRects3, RegistryPaths.StuckRects3Value));
-        Assert.Equal(0, _shell.Restarts);
-    }
-
-    [Fact]
-    public void ApplyFailsClearlyWhenStuckRectsIsMissing()
-    {
-        _registry.DeleteValue(Hive.CurrentUser, RegistryPaths.StuckRects3, RegistryPaths.StuckRects3Value);
-        var controller = Controller(19045);
         var plan = controller.Plan(new PositionRequest(TaskbarEdge.Top));
-        var ex = Assert.Throws<InvalidOperationException>(() => controller.Apply(plan));
-        Assert.Contains("StuckRects3", ex.Message);
-        Assert.Null(_backups.Backup);
-    }
+        controller.Apply(plan.Changes);
 
-    [Fact]
-    public void NoRestartSkipsExplorerRestart()
-    {
-        var controller = Controller(19045);
-        controller.Apply(controller.Plan(new PositionRequest(TaskbarEdge.Left)), restartExplorer: false);
-        Assert.Equal(TaskbarEdge.Left, Edge(RegistryPaths.StuckRects3, RegistryPaths.StuckRects3Value));
+        var state = controller.Inspect();
+        Assert.True(state.IsModActive(WindhawkMods.TaskbarOnTop));
+        Assert.Equal(TaskbarEdge.Top, state.CurrentEdge);
+        Assert.Equal(PositionEngine.Windhawk, state.ActiveEngine);
         Assert.Equal(0, _shell.Restarts);
+        Assert.True(controller.HasBackup);
     }
 
     [Fact]
-    public void BackupKeepsTheOriginalAcrossSeveralChanges()
+    public void RestoreRevertsWindhawkAndRegistryChanges()
     {
-        _epFolder = true;
+        MarkInstalled(WindhawkMods.TaskbarVertical);
+        InstallMod(WindhawkMods.TaskbarVertical, enabled: false);
+        _registry.SetString(Hive.LocalMachine, ModKey(WindhawkMods.TaskbarVertical) + @"\Settings", "taskbarLocation", "left");
         var controller = Controller();
-        controller.Apply(controller.Plan(new PositionRequest(TaskbarEdge.Top)));
-        controller.Apply(controller.Plan(new PositionRequest(TaskbarEdge.Left)));
 
-        Assert.Equal(TaskbarEdge.Bottom, StuckRects.ReadEdge(_backups.Backup!.StuckRects3));
-        Assert.Null(_backups.Backup.OldTaskbar);
-    }
-
-    [Fact]
-    public void RestorePutsEverythingBack()
-    {
-        _epFolder = true;
-        _registry.SetDword(Hive.CurrentUser, RegistryPaths.Advanced, RegistryPaths.TaskbarAl, 1);
-        var controller = Controller();
-        controller.SetAlignment(TaskbarAlignment.Left);
-        controller.Apply(controller.Plan(new PositionRequest(TaskbarEdge.Right, StartMenuStyle.Windows10)));
+        controller.Apply(controller.Plan(new PositionRequest(TaskbarEdge.Right)).Changes);
+        controller.Apply(new ChangeSet { Registry = new[] { TaskbarSettings.Alignment.Edit(0) } });
+        Assert.Equal(TaskbarEdge.Right, controller.Inspect().CurrentEdge);
 
         Assert.True(controller.Restore());
 
-        Assert.Equal(TaskbarEdge.Bottom, Edge(RegistryPaths.StuckRects3, RegistryPaths.StuckRects3Value));
-        Assert.Equal(TaskbarEdge.Bottom, Edge(RegistryPaths.MMStuckRects3, "MON1"));
-        Assert.Null(_registry.GetDword(Hive.CurrentUser, RegistryPaths.ExplorerPatcher, RegistryPaths.OldTaskbar));
-        Assert.Null(_registry.GetDword(Hive.CurrentUser, RegistryPaths.ExplorerPatcher, RegistryPaths.OldTaskbarAl));
-        Assert.Null(_registry.GetDword(Hive.CurrentUser, RegistryPaths.Advanced, RegistryPaths.StartShowClassicMode));
-        Assert.Equal(1, _registry.GetDword(Hive.CurrentUser, RegistryPaths.Advanced, RegistryPaths.TaskbarAl));
-        Assert.Null(_backups.Backup);
-        Assert.Equal(2, _shell.Restarts);
+        var state = controller.Inspect();
+        Assert.False(state.IsModActive(WindhawkMods.TaskbarVertical));
+        Assert.Equal("left", state.Mod(WindhawkMods.TaskbarVertical).GetText("taskbarLocation"));
+        Assert.Null(state.Mod(WindhawkMods.TaskbarVertical).GetNumber("TaskbarWidth"));
+        Assert.Null(_registry.GetDword(Hive.CurrentUser, RegistryPaths.Advanced, "TaskbarAl"));
+        Assert.False(controller.HasBackup);
+        Assert.False(controller.Restore());
     }
 
     [Fact]
-    public void RestoreWithoutBackupReportsFalse()
+    public void RestoreTurnsOffModsThisAppInstalled()
     {
-        Assert.False(Controller().Restore());
+        _processes.Handler = (_, args) => { MarkInstalled(args[2]); return new ProcessResult(0, ""); };
+        var controller = Controller();
+        controller.Apply(controller.Plan(new PositionRequest(TaskbarEdge.Left)).Changes);
+
+        controller.Restore();
+
+        var mod = controller.Inspect().Mod(WindhawkMods.TaskbarVertical);
+        Assert.True(mod.Installed);
+        Assert.False(mod.Enabled);
+        Assert.Equal("left", mod.GetText("taskbarLocation")); // settings kept for later use
+    }
+
+    [Fact]
+    public void RegistryEnginesRestartExplorerAndRestoreBlobs()
+    {
+        _build = Samples.Win10;
+        _windhawkInstalled = false;
+        var controller = Controller();
+
+        controller.Apply(controller.Plan(new PositionRequest(TaskbarEdge.Left)).Changes);
+
+        Assert.Equal(1, _shell.Restarts);
+        Assert.Equal(TaskbarEdge.Left, controller.Inspect().CurrentEdge);
+        Assert.Equal(TaskbarEdge.Left, StuckRects.ReadEdge(_registry.GetBinary(Hive.CurrentUser, RegistryPaths.MMStuckRects3, "MON2")));
+
+        controller.Restore(restartExplorer: false);
+
+        Assert.Equal(TaskbarEdge.Bottom, controller.Inspect().CurrentEdge);
+        Assert.Equal(1, _shell.Restarts);
+    }
+
+    [Fact]
+    public void SettingChangesNotifyExplorerWithoutRestart()
+    {
+        var controller = Controller();
+        controller.Apply(new ChangeSet { Registry = new[] { TaskbarSettings.Search.Edit(0) }, AutoHide = true });
+
+        Assert.Equal(0, _registry.GetDword(Hive.CurrentUser, RegistryPaths.Search, "SearchboxTaskbarMode"));
+        Assert.Equal(1, _shell.Notifications);
         Assert.Equal(0, _shell.Restarts);
+        Assert.True(_shell.AutoHide);
     }
 
     [Fact]
-    public void SetAlignmentWritesExplorerPatcherValueOnlyWhenInstalled()
+    public void FailedWindhawkStepLeavesRegistryUntouched()
     {
-        Controller().SetAlignment(TaskbarAlignment.Left);
-        Assert.Equal(0, _registry.GetDword(Hive.CurrentUser, RegistryPaths.Advanced, RegistryPaths.TaskbarAl));
-        Assert.Null(_registry.GetDword(Hive.CurrentUser, RegistryPaths.ExplorerPatcher, RegistryPaths.OldTaskbarAl));
+        _processes.Handler = (_, _) => new ProcessResult(1, "cancelled");
+        var controller = Controller();
+        var changes = controller.Plan(new PositionRequest(TaskbarEdge.Top)).Changes
+            .Merge(new ChangeSet { Registry = new[] { TaskbarSettings.TaskView.Edit(0) } });
 
-        _epFolder = true;
-        Controller().SetAlignment(TaskbarAlignment.Center);
-        Assert.Equal(1, _registry.GetDword(Hive.CurrentUser, RegistryPaths.ExplorerPatcher, RegistryPaths.OldTaskbarAl));
+        Assert.Throws<InvalidOperationException>(() => controller.Apply(changes));
+        Assert.Null(_registry.GetDword(Hive.CurrentUser, RegistryPaths.Advanced, "ShowTaskViewButton"));
+    }
+
+    [Fact]
+    public void InspectReportsSettings()
+    {
+        _registry.SetDword(Hive.CurrentUser, RegistryPaths.Advanced, "TaskbarAl", 0);
+        var state = Controller().Inspect();
+        Assert.Equal(0, state.GetSetting(TaskbarSettings.Alignment));
+        Assert.Equal(TaskbarSettings.TaskView.DefaultValue, state.GetSetting(TaskbarSettings.TaskView));
+    }
+
+    [Fact]
+    public void BackupSurvivesJsonRoundTrip()
+    {
+        var file = new JsonFile<TaskbarBackup>(Path.Combine(_dir, "b.json"));
+        var backup = new TaskbarBackup { WindowsBuild = 1 };
+        backup.Registry["x"] = new RegistryEdit(RegistryPaths.StuckRects3, "Settings", RegistryData.FromBinary(new byte[] { 1, 2 }));
+        backup.Registry["y"] = new RegistryEdit(RegistryPaths.Advanced, "TaskbarAl", null);
+        backup.Windhawk["taskbar-on-top"] = new WindhawkModBackup { Installed = true, Settings = { ["taskbarLocation"] = ModSettingValue.Of("top"), ["w"] = null } };
+
+        file.Save(backup);
+        var copy = file.Load()!;
+
+        Assert.Equal(new byte[] { 1, 2 }, copy.Registry["x"].Value!.Binary);
+        Assert.Null(copy.Registry["y"].Value);
+        Assert.Equal("top", copy.Windhawk["taskbar-on-top"].Settings["taskbarLocation"]!.Text);
     }
 }

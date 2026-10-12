@@ -1,15 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- Only for NotifyIcon (the notification-area icon); the UI itself is WPF. -->
     <UseWindowsForms>true</UseWindowsForms>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>StartBarController</AssemblyName>
     <RootNamespace>StartBarController.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <StartupObject>StartBarController.App.Program</StartupObject>
+    <Product>Start Bar Controller</Product>
+    <!-- The WPF Fluent theme (ThemeMode) is marked experimental. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <!-- DPI awareness belongs in app.manifest for WPF; this analyzer assumes a WinForms UI. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <!-- WinForms and WPF both define these; the app uses the WPF ones. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Using Include="System.IO" />
+    <Using Include="System.Threading" />
+    <Resource Include="Assets\app.ico" />
+    <!-- App is created by Program.Main (single instance, CLI), so App.xaml must not generate its own Main. -->
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
     <ProjectReference Include="..\StartBarController.Core\StartBarController.Core.csproj" />
   </ItemGroup>
 </Project>

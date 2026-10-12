@@ -3,10 +3,7 @@ namespace StartBarController.Core.Tests;
 public class StuckRectsTests
 {
     [Fact]
-    public void ReadsEdgeFromByte12()
-    {
-        Assert.Equal(TaskbarEdge.Bottom, StuckRects.ReadEdge(Samples.StuckRectsBottom()));
-    }
+    public void ReadsEdgeFromByte12() => Assert.Equal(TaskbarEdge.Bottom, StuckRects.ReadEdge(Samples.StuckRectsBottom()));
 
     [Theory]
     [InlineData(TaskbarEdge.Left)]
@@ -19,16 +16,15 @@ public class StuckRectsTests
         byte[] updated = StuckRects.WithEdge(original, edge);
 
         Assert.Equal(edge, StuckRects.ReadEdge(updated));
-        Assert.Equal((byte)edge, updated[12]);
         for (int i = 0; i < original.Length; i++)
         {
-            if (i != 12)
+            if (i != StuckRects.EdgeOffset)
             {
                 Assert.Equal(original[i], updated[i]);
             }
         }
 
-        Assert.Equal(TaskbarEdge.Bottom, StuckRects.ReadEdge(original)); // input untouched
+        Assert.Equal(TaskbarEdge.Bottom, StuckRects.ReadEdge(original));
     }
 
     [Fact]
@@ -42,8 +38,6 @@ public class StuckRectsTests
     }
 
     [Fact]
-    public void WithEdgeRejectsShortData()
-    {
+    public void WithEdgeRejectsShortData() =>
         Assert.Throws<ArgumentException>(() => StuckRects.WithEdge(new byte[5], TaskbarEdge.Top));
-    }
 }

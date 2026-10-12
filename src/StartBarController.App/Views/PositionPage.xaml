@@ -1,0 +1,248 @@
+<UserControl x:Class="StartBarController.App.Views.PositionPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:StartBarController.App.Views">
+    <StackPanel>
+        <TextBlock Style="{StaticResource PageTitle}" Text="Taskbar position" />
+        <TextBlock x:Name="StatusText" Style="{StaticResource Caption}" FontSize="13" />
+
+        <!-- Preview and edge buttons -->
+        <Border Style="{StaticResource Card}" Margin="0,20,0,4" Padding="24">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <local:TaskbarPreview x:Name="Preview" Height="230" MaxWidth="400" Margin="0,0,24,0" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="Move the taskbar to" Style="{StaticResource CardTitle}" FontWeight="SemiBold" Margin="4,0,0,8" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Button x:Name="EdgeTop" Grid.Row="0" Grid.Column="1" Tag="Top" Click="OnEdgeClick" Width="104" Height="58" Margin="3">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE74A;" HorizontalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                <TextBlock Text="Top" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="EdgeLeft" Grid.Row="1" Grid.Column="0" Tag="Left" Click="OnEdgeClick" Width="104" Height="58" Margin="3">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72B;" HorizontalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                <TextBlock Text="Left" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="EdgeRight" Grid.Row="1" Grid.Column="2" Tag="Right" Click="OnEdgeClick" Width="104" Height="58" Margin="3">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72A;" HorizontalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                <TextBlock Text="Right" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="EdgeBottom" Grid.Row="2" Grid.Column="1" Tag="Bottom" Click="OnEdgeClick" Width="104" Height="58" Margin="3">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE74B;" HorizontalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                <TextBlock Text="Bottom" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                    <TextBlock Style="{StaticResource Caption}" Text="Or click an edge of the preview." Margin="4,10,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Engine -->
+        <TextBlock Style="{StaticResource SectionTitle}" Text="How the taskbar is moved" />
+        <Border Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,24,0">
+                    <TextBlock Style="{StaticResource CardTitle}" Text="Engine" />
+                    <TextBlock x:Name="EngineDescription" Style="{StaticResource Caption}" />
+                </StackPanel>
+                <ComboBox x:Name="EngineBox" Grid.Column="1" Width="280" VerticalAlignment="Center" SelectionChanged="OnEngineChanged">
+                    <ComboBoxItem Content="Automatic (recommended)" Tag="Auto" />
+                    <ComboBoxItem Content="Windhawk · Windows 11 look" Tag="Windhawk" />
+                    <ComboBoxItem Content="ExplorerPatcher · Windows 10 look" Tag="ExplorerPatcher" />
+                    <ComboBoxItem Content="Windows built-in" Tag="Native" />
+                </ComboBox>
+            </Grid>
+        </Border>
+
+        <!-- Windhawk -->
+        <Border x:Name="WindhawkCard" Style="{StaticResource Card}">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Windhawk" />
+                        <TextBlock x:Name="WindhawkStatus" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="InstallWindhawk" Content="Install Windhawk" Style="{DynamicResource AccentButtonStyle}" Click="OnInstallWindhawk" />
+                        <Button x:Name="OpenWindhawk" Content="Open Windhawk" Margin="8,0,0,0" Click="OnOpenWindhawk" />
+                        <Button Content="Learn more" Margin="8,0,0,0" Click="OnWindhawkLearnMore" />
+                    </StackPanel>
+                </Grid>
+                <StackPanel x:Name="ModRows" Margin="0,10,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- ExplorerPatcher -->
+        <Border x:Name="ExplorerPatcherCard" Style="{StaticResource Card}">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Style="{StaticResource CardTitle}" Text="ExplorerPatcher" />
+                        <TextBlock x:Name="ExplorerPatcherStatus" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="InstallExplorerPatcher" Content="Install ExplorerPatcher" Style="{DynamicResource AccentButtonStyle}"
+                                Click="OnInstallExplorerPatcher" />
+                        <Button Content="Learn more" Margin="8,0,0,0" Click="OnExplorerPatcherLearnMore" />
+                    </StackPanel>
+                </Grid>
+                <Grid Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Start menu style" />
+                        <TextBlock Style="{StaticResource Caption}"
+                                   Text="The Windows 10 start menu opens next to the taskbar on every edge (not available on Windows 11 24H2 and later)." />
+                    </StackPanel>
+                    <ComboBox x:Name="ClassicStartMenuBox" Grid.Column="1" Width="200" VerticalAlignment="Center"
+                              SelectionChanged="OnClassicStartMenuChanged">
+                        <ComboBoxItem Content="Keep current" Tag="Keep" />
+                        <ComboBoxItem Content="Windows 10" Tag="Windows10" />
+                        <ComboBoxItem Content="Windows 11" Tag="Windows11" />
+                    </ComboBox>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Windhawk layout options -->
+        <StackPanel x:Name="LayoutSection">
+            <TextBlock Style="{StaticResource SectionTitle}" Text="Layout" />
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Vertical taskbar width" />
+                        <TextBlock Style="{StaticResource Caption}" Text="In pixels. Windows 11's own taskbar is 48 pixels tall." />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Slider x:Name="WidthSlider" Width="200" Minimum="40" Maximum="240" TickFrequency="4" IsSnapToTickEnabled="True"
+                                ValueChanged="OnWidthChanged" VerticalAlignment="Center" />
+                        <TextBlock x:Name="WidthText" Width="56" TextAlignment="Right" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Start menu position on a vertical taskbar" />
+                        <TextBlock Style="{StaticResource Caption}" Text="Where the start menu opens along a left or right taskbar." />
+                    </StackPanel>
+                    <ComboBox x:Name="StartMenuAlignmentBox" Grid.Column="1" Width="200" VerticalAlignment="Center"
+                              SelectionChanged="OnLayoutChanged">
+                        <ComboBoxItem Content="Windows default" Tag="windowsDefault" />
+                        <ComboBoxItem Content="Top" Tag="top" />
+                        <ComboBoxItem Content="Center" Tag="center" />
+                        <ComboBoxItem Content="Bottom" Tag="bottom" />
+                    </ComboBox>
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Jump lists on a vertical taskbar" />
+                        <TextBlock Style="{StaticResource Caption}" Text="Where right-click menus of taskbar apps open." />
+                    </StackPanel>
+                    <ComboBox x:Name="JumpListAlignmentBox" Grid.Column="1" Width="200" VerticalAlignment="Center"
+                              SelectionChanged="OnLayoutChanged">
+                        <ComboBoxItem Content="Top" Tag="top" />
+                        <ComboBoxItem Content="Center" Tag="center" />
+                        <ComboBoxItem Content="Bottom" Tag="bottom" />
+                    </ComboBox>
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Running indicators on top" />
+                        <TextBlock Style="{StaticResource Caption}" Text="With the taskbar at the top, show the open-app line above the icons." />
+                    </StackPanel>
+                    <CheckBox x:Name="IndicatorsToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                              Click="OnLayoutChanged" />
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Start menu slides in from the taskbar" />
+                        <TextBlock Style="{StaticResource Caption}" Text="Match the start menu animation to the taskbar's edge." />
+                    </StackPanel>
+                    <CheckBox x:Name="AnimationToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                              Click="OnLayoutChanged" />
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Use Windows' own support when available" />
+                        <TextBlock Style="{StaticResource Caption}"
+                                   Text="Newer Windows 11 builds can place the taskbar themselves; the mods then let Windows do it." />
+                    </StackPanel>
+                    <CheckBox x:Name="NativeToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                              Click="OnLayoutChanged" />
+                </Grid>
+            </Border>
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <Button x:Name="ApplyLayout" Content="Apply layout" Style="{DynamicResource AccentButtonStyle}" Click="OnApplyLayout" />
+                <TextBlock x:Name="LayoutHint" Style="{StaticResource Caption}" Margin="12,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

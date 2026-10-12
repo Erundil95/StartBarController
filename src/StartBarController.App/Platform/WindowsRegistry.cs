@@ -1,7 +1,7 @@
 using Microsoft.Win32;
 using StartBarController.Core;
 
-namespace StartBarController.App;
+namespace StartBarController.App.Platform;
 
 internal sealed class WindowsRegistry : IRegistry
 {
@@ -23,6 +23,12 @@ internal sealed class WindowsRegistry : IRegistry
         k.SetValue(name, value, RegistryValueKind.Binary);
     }
 
+    public void SetString(Hive hive, string key, string name, string value)
+    {
+        using RegistryKey k = Open(hive).CreateSubKey(key, writable: true);
+        k.SetValue(name, value, RegistryValueKind.String);
+    }
+
     public void DeleteValue(Hive hive, string key, string name)
     {
         using RegistryKey? k = Open(hive).OpenSubKey(key, writable: true);
@@ -39,6 +45,20 @@ internal sealed class WindowsRegistry : IRegistry
     {
         using RegistryKey? k = Open(hive).OpenSubKey(key);
         return k?.GetSubKeyNames() ?? Array.Empty<string>();
+    }
+
+    /// <summary>True if the current process may write to <paramref name="key"/>.</summary>
+    public static bool CanWrite(Hive hive, string key)
+    {
+        try
+        {
+            using RegistryKey k = Open(hive).CreateSubKey(key, writable: true);
+            return true;
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return false;
+        }
     }
 
     private static RegistryKey Open(Hive hive) => RegistryKey.OpenBaseKey(

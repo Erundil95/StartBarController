@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace StartBarController.Core;
 
 public enum CliAction
@@ -5,25 +7,34 @@ public enum CliAction
     Gui,
     Help,
     Status,
+    ListSettings,
     Apply,
     Restore,
+
+    /// <summary>Internal: the elevated helper that writes Windhawk storage.</summary>
+    WindhawkElevated,
+
+    /// <summary>Internal: run by the uninstaller.</summary>
+    Uninstall,
 }
 
 public sealed record CliOptions
 {
     public CliAction Action { get; init; } = CliAction.Gui;
 
+    public bool StartInTray { get; init; }
+
     public TaskbarEdge? Edge { get; init; }
 
-    public StartMenuStyle StartMenu { get; init; } = StartMenuStyle.Keep;
+    public PositionEngine? Engine { get; init; }
 
-    public TaskbarAlignment? Alignment { get; init; }
+    public IReadOnlyList<(TaskbarSetting Setting, int Value)> Settings { get; init; } = Array.Empty<(TaskbarSetting, int)>();
 
     public bool? AutoHide { get; init; }
 
-    public bool ForceNative { get; init; }
-
     public bool NoRestart { get; init; }
+
+    public string? RequestFile { get; init; }
 
     public string? Error { get; init; }
 }
@@ -31,20 +42,20 @@ public sealed record CliOptions
 public static class CommandLine
 {
     public const string Usage = """
-        StartBarController - customize the Windows taskbar.
+        Start Bar Controller - move and customize the Windows taskbar.
 
-        Run without arguments to open the window. Command-line use:
+        Run without arguments to open the app. Command-line use:
 
           StartBarController --status
-          StartBarController --edge <top|bottom|left|right> [--start-menu <keep|win10|win11>]
-                             [--force-native] [--no-restart]
-          StartBarController --align <left|center>
+          StartBarController --edge <top|bottom|left|right> [--engine <auto|windhawk|explorerpatcher|native>]
+          StartBarController --set <setting>=<value> [--set ...]
           StartBarController --autohide <on|off>
-          StartBarController --restore [--no-restart]
+          StartBarController --restore
+          StartBarController --list-settings
+          StartBarController --tray               start in the notification area
 
-        --edge, --align and --autohide can be combined in one call.
-        --force-native  write the edge to the registry even where Windows 11 does not support it
-        --no-restart    do not restart Explorer (changes to the edge apply after the next restart)
+        --edge, --set and --autohide can be combined. Add --no-restart to skip restarting
+        Explorer when a change needs it (it then applies at the next restart).
         """;
 
     public static CliOptions Parse(IReadOnlyList<string> args)
@@ -55,12 +66,13 @@ public static class CommandLine
         }
 
         var options = new CliOptions { Action = CliAction.Apply };
-        bool status = false, restore = false;
+        var settings = new List<(TaskbarSetting, int)>();
+        bool status = false, restore = false, tray = false, list = false;
 
         for (int i = 0; i < args.Count; i++)
         {
             string arg = args[i].ToLowerInvariant();
-            string? Next() => i + 1 < args.Count ? args[++i].ToLowerInvariant() : null;
+            string? Next() => i + 1 < args.Count ? args[++i] : null;
 
             switch (arg)
             {
@@ -69,62 +81,60 @@ public static class CommandLine
                 case "--status":
                     status = true;
                     break;
+                case "--list-settings":
+                    list = true;
+                    break;
                 case "--restore":
                     restore = true;
                     break;
-                case "--force-native":
-                    options = options with { ForceNative = true };
+                case "--tray":
+                    tray = true;
                     break;
                 case "--no-restart":
                     options = options with { NoRestart = true };
                     break;
                 case "--edge":
-                    TaskbarEdge? edge = Next() switch
-                    {
-                        "top" => TaskbarEdge.Top,
-                        "bottom" => TaskbarEdge.Bottom,
-                        "left" => TaskbarEdge.Left,
-                        "right" => TaskbarEdge.Right,
-                        _ => null,
-                    };
-                    if (edge is null)
+                    if (!EdgeExtensions.TryParse(Next(), out TaskbarEdge edge))
                     {
                         return Fail("--edge expects top, bottom, left or right.");
                     }
 
                     options = options with { Edge = edge };
                     break;
-                case "--start-menu":
-                    StartMenuStyle? style = Next() switch
+                case "--engine":
+                    PositionEngine? engine = Next()?.ToLowerInvariant() switch
                     {
-                        "keep" => StartMenuStyle.Keep,
-                        "win10" or "windows10" => StartMenuStyle.Windows10,
-                        "win11" or "windows11" => StartMenuStyle.Windows11,
+                        "auto" => PositionEngine.Auto,
+                        "windhawk" => PositionEngine.Windhawk,
+                        "explorerpatcher" or "ep" => PositionEngine.ExplorerPatcher,
+                        "native" or "windows" => PositionEngine.Native,
                         _ => null,
                     };
-                    if (style is null)
+                    if (engine is null)
                     {
-                        return Fail("--start-menu expects keep, win10 or win11.");
+                        return Fail("--engine expects auto, windhawk, explorerpatcher or native.");
                     }
 
-                    options = options with { StartMenu = style.Value };
+                    options = options with { Engine = engine };
                     break;
-                case "--align":
-                    TaskbarAlignment? align = Next() switch
+                case "--set":
+                    string? pair = Next();
+                    int eq = pair?.IndexOf('=') ?? -1;
+                    TaskbarSetting? setting = eq > 0 ? TaskbarSettings.Find(pair![..eq]) : null;
+                    if (setting is null || !int.TryParse(pair![(eq + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
                     {
-                        "left" => TaskbarAlignment.Left,
-                        "center" or "centre" => TaskbarAlignment.Center,
-                        _ => null,
-                    };
-                    if (align is null)
-                    {
-                        return Fail("--align expects left or center.");
+                        return Fail("--set expects <setting>=<number>; see --list-settings.");
                     }
 
-                    options = options with { Alignment = align };
+                    if (setting.Options.All(o => o.Value != value))
+                    {
+                        return Fail($"'{value}' is not a valid value for {setting.Id}; see --list-settings.");
+                    }
+
+                    settings.Add((setting, value));
                     break;
                 case "--autohide":
-                    bool? autoHide = Next() switch
+                    bool? autoHide = Next()?.ToLowerInvariant() switch
                     {
                         "on" or "true" or "1" => true,
                         "off" or "false" or "0" => false,
@@ -137,33 +147,41 @@ public static class CommandLine
 
                     options = options with { AutoHide = autoHide };
                     break;
+                case "--windhawk-elevated":
+                    return Next() is { } file
+                        ? new CliOptions { Action = CliAction.WindhawkElevated, RequestFile = file }
+                        : Fail("--windhawk-elevated expects a file.");
+                case "--uninstall":
+                    return new CliOptions { Action = CliAction.Uninstall };
                 default:
                     return Fail($"Unknown argument '{args[i]}'.");
             }
         }
 
-        bool changes = options.Edge is not null || options.Alignment is not null || options.AutoHide is not null;
-        if (restore && (status || changes))
+        options = options with { Settings = settings };
+        bool changes = options.Edge is not null || settings.Count > 0 || options.AutoHide is not null;
+        int actions = (status ? 1 : 0) + (restore ? 1 : 0) + (list ? 1 : 0) + (tray ? 1 : 0) + (changes ? 1 : 0);
+        if (actions > 1)
         {
-            return Fail("--restore cannot be combined with other actions.");
+            return Fail("Use one of --status, --restore, --list-settings, --tray or a change per call.");
         }
 
-        if (restore)
+        if (options.Engine is not null && options.Edge is null)
         {
-            return options with { Action = CliAction.Restore };
+            return Fail("--engine is used together with --edge.");
         }
 
-        if (status && !changes)
+        return options with
         {
-            return options with { Action = CliAction.Status };
-        }
-
-        if (!changes)
-        {
-            return Fail("Nothing to do: pass --edge, --align, --autohide, --status or --restore.");
-        }
-
-        return options;
+            Action = restore ? CliAction.Restore
+                : status ? CliAction.Status
+                : list ? CliAction.ListSettings
+                : tray ? CliAction.Gui
+                : changes ? CliAction.Apply
+                : CliAction.Help,
+            StartInTray = tray,
+            Error = actions == 0 && !tray ? "Nothing to do." : null,
+        };
     }
 
     private static CliOptions Fail(string message) => new() { Action = CliAction.Help, Error = message };
@@ -172,7 +190,7 @@ public static class CommandLine
 /// <summary>Executes parsed command-line options. Returns the process exit code.</summary>
 public static class CliRunner
 {
-    public static int Run(CliOptions options, TaskbarController controller, TextWriter output)
+    public static int Run(CliOptions options, TaskbarController controller, AppSettings settings, TextWriter output)
     {
         switch (options.Action)
         {
@@ -187,15 +205,40 @@ public static class CliRunner
                 return options.Error is null ? 0 : 2;
 
             case CliAction.Status:
-                output.WriteLine(controller.Inspect().Describe());
+            {
+                SystemState state = controller.Inspect();
+                output.WriteLine(state.Describe());
+                output.WriteLine($"Windhawk: {(state.WindhawkInstalled ? "installed" : "not installed")}" +
+                                 $" · ExplorerPatcher: {(state.ExplorerPatcherInstalled ? "installed" : "not installed")}");
+                foreach (string mod in Windhawk.WindhawkMods.All)
+                {
+                    var m = state.Mod(mod);
+                    output.WriteLine($"  {Windhawk.WindhawkMods.DisplayName(mod)}: " +
+                                     (!m.Installed ? "not installed" : m.Enabled ? "enabled" : "disabled"));
+                }
+
                 output.WriteLine($"Auto-hide: {(controller.Shell.GetAutoHide() ? "on" : "off")}");
                 output.WriteLine($"Backup of original settings: {(controller.HasBackup ? "yes" : "no")}");
                 return 0;
+            }
+
+            case CliAction.ListSettings:
+            {
+                SystemState state = controller.Inspect();
+                foreach (TaskbarSetting s in TaskbarSettings.All)
+                {
+                    string availability = s.IsAvailable(state.WindowsBuild) ? "" : " (needs a newer Windows 11)";
+                    output.WriteLine($"{s.Id}: {s.Title}{availability} - now {state.GetSetting(s)}");
+                    output.WriteLine("    " + string.Join(", ", s.Options.Select(o => $"{o.Value} = {o.Label}")));
+                }
+
+                return 0;
+            }
 
             case CliAction.Restore:
                 if (!controller.Restore(!options.NoRestart))
                 {
-                    output.WriteLine("No backup found; nothing to restore.");
+                    output.WriteLine("Nothing to restore.");
                     return 1;
                 }
 
@@ -203,12 +246,14 @@ public static class CliRunner
                 return 0;
 
             case CliAction.Apply:
-                // Plan the edge first so an unsupported request changes nothing.
-                PositionPlan? plan = options.Edge is TaskbarEdge edge
-                    ? controller.Plan(new PositionRequest(edge, options.StartMenu, options.ForceNative))
-                    : null;
-                if (plan is not null)
+            {
+                SystemState state = controller.Inspect();
+                ChangeSet changes = ChangeSet.Empty;
+
+                if (options.Edge is TaskbarEdge edge)
                 {
+                    PositionPlan plan = controller.Plan(new PositionRequest(
+                        edge, options.Engine ?? settings.Engine, settings.ClassicStartMenu, settings.Windhawk), state);
                     output.WriteLine(plan.Summary);
                     foreach (string warning in plan.Warnings)
                     {
@@ -219,32 +264,34 @@ public static class CliRunner
                     {
                         return 1;
                     }
+
+                    changes = changes.Merge(plan.Changes);
                 }
 
-                if (options.Alignment is TaskbarAlignment alignment)
+                foreach ((TaskbarSetting setting, int value) in options.Settings)
                 {
-                    controller.SetAlignment(alignment);
-                    output.WriteLine($"Alignment set to {alignment.ToString().ToLowerInvariant()}.");
+                    if (!setting.IsAvailable(state.WindowsBuild))
+                    {
+                        output.WriteLine($"Note: \"{setting.Title}\" needs a newer Windows 11; it may have no effect.");
+                    }
+
+                    changes = changes.Merge(new ChangeSet { Registry = new[] { setting.Edit(value) } });
                 }
 
                 if (options.AutoHide is bool autoHide)
                 {
-                    controller.Shell.SetAutoHide(autoHide);
-                    output.WriteLine($"Auto-hide {(autoHide ? "enabled" : "disabled")}.");
+                    changes = changes with { AutoHide = autoHide };
                 }
 
-                if (plan is not null)
-                {
-                    controller.Apply(plan, !options.NoRestart);
-                    output.WriteLine(options.NoRestart
-                        ? "Saved. The new position applies the next time Explorer restarts."
-                        : "Taskbar moved.");
-                }
-
+                controller.Apply(changes, state, !options.NoRestart);
+                output.WriteLine(options.NoRestart && changes.RestartExplorer
+                    ? "Saved. Some changes apply the next time Explorer restarts."
+                    : "Done.");
                 return 0;
+            }
 
             default:
-                throw new ArgumentOutOfRangeException(nameof(options), options.Action, "The GUI is not handled by CliRunner.");
+                throw new ArgumentOutOfRangeException(nameof(options), options.Action, "Not a command-line action.");
         }
     }
 }

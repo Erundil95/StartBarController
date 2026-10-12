@@ -1,25 +1,53 @@
+using StartBarController.App.Platform;
 using StartBarController.Core;
 
 namespace StartBarController.App;
 
 internal static class Program
 {
+    private const string MutexName = @"Local\StartBarController";
+    private const string ShowEventName = @"Local\StartBarController.Show";
+
     [STAThread]
     private static int Main(string[] args)
     {
-        CliOptions options = CommandLine.Parse(args);
-        TaskbarController controller = CreateController();
-
-        if (options.Action == CliAction.Gui)
+        if (args is ["--smoke-test", string folder])
         {
-            ApplicationConfiguration.Initialize();
-            Application.Run(new MainForm(controller));
+            var smoke = new App(startInTray: false, new EventWaitHandle(false, EventResetMode.AutoReset), folder);
+            smoke.InitializeComponent();
+            return smoke.Run();
+        }
+
+        CliOptions options = CommandLine.Parse(args);
+        return options.Action switch
+        {
+            CliAction.Gui => RunGui(options.StartInTray),
+            CliAction.WindhawkElevated => RunElevatedHelper(options.RequestFile!),
+            CliAction.Uninstall => RunUninstall(),
+            _ => RunCli(options),
+        };
+    }
+
+    private static int RunGui(bool startInTray)
+    {
+        using var mutex = new Mutex(initiallyOwned: true, MutexName, out bool first);
+        using var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+        if (!first)
+        {
+            // Already running: bring that window up instead.
+            showEvent.Set();
             return 0;
         }
 
-        // This is a GUI-subsystem exe: borrow the parent console when started from one,
-        // otherwise show the output in a message box.
-        bool hasConsole = NativeMethods.AttachConsole(NativeMethods.ATTACH_PARENT_PROCESS);
+        var app = new App(startInTray, showEvent);
+        app.InitializeComponent();
+        return app.Run();
+    }
+
+    private static int RunCli(CliOptions options)
+    {
+        // A GUI-subsystem exe: borrow the parent console when started from one.
+        bool hasConsole = Win32.AttachConsole(Win32.ATTACH_PARENT_PROCESS);
         TextWriter output = hasConsole ? Console.Out : new StringWriter();
         if (hasConsole)
         {
@@ -29,7 +57,7 @@ internal static class Program
         int exitCode;
         try
         {
-            exitCode = CliRunner.Run(options, controller, output);
+            exitCode = CliRunner.Run(options, AppServices.CreateController(), AppServices.LoadSettings(), output);
         }
         catch (Exception e)
         {
@@ -39,22 +67,53 @@ internal static class Program
 
         if (!hasConsole)
         {
-            MessageBox.Show(output.ToString(), "Start Bar Controller", MessageBoxButtons.OK,
-                exitCode == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            System.Windows.MessageBox.Show(output.ToString(), "Start Bar Controller");
         }
 
         return exitCode;
     }
 
-    private static TaskbarController CreateController()
+    /// <summary>
+    /// Runs elevated: applies a Windhawk request written by the unelevated app. Windhawk is
+    /// located afresh and the request is validated against the two taskbar mods.
+    /// </summary>
+    private static int RunElevatedHelper(string requestFile)
     {
-        var registry = new WindowsRegistry();
-        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        var inspector = new SystemInspector(registry, Directory.Exists, new[] { Path.Combine(programFiles, "ExplorerPatcher") });
-        string backupPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StartBarController", "backup.json");
+        try
+        {
+            WindhawkRequest request = WindhawkRequest.FromJson(File.ReadAllText(requestFile));
+            request.Validate();
+            var windhawk = AppServices.LocateWindhawk() ?? throw new InvalidOperationException("Windhawk isn't installed.");
+            AppServices.DirectExecutor().Execute(windhawk, request.InstallMods, request.Edits);
+            return 0;
+        }
+        catch (Exception e)
+        {
+            try
+            {
+                File.WriteAllText(requestFile + ".error", e.Message);
+            }
+            catch (IOException)
+            {
+            }
 
-        return new TaskbarController(registry, new ExplorerShell(), new JsonFileBackupStore(backupPath), inspector,
-            Environment.OSVersion.Version.Build);
+            return 1;
+        }
+    }
+
+    /// <summary>Called by the uninstaller: put the taskbar back and remove the autostart entry.</summary>
+    private static int RunUninstall()
+    {
+        try
+        {
+            Autostart.Set(false);
+            AppServices.CreateController().Restore();
+        }
+        catch (Exception)
+        {
+            // Never block an uninstall.
+        }
+
+        return 0;
     }
 }

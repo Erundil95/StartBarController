@@ -1,0 +1,81 @@
+<UserControl x:Class="StartBarController.App.Views.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Style="{StaticResource PageTitle}" Text="Settings" />
+
+        <TextBlock Style="{StaticResource SectionTitle}" Text="App" />
+        <Border Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,24,0">
+                    <TextBlock Style="{StaticResource CardTitle}" Text="Start with Windows" />
+                    <TextBlock Style="{StaticResource Caption}" Text="Start in the notification area when you sign in." />
+                </StackPanel>
+                <CheckBox x:Name="AutostartToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                          Click="OnAutostartClick" />
+            </Grid>
+        </Border>
+        <Border Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,24,0">
+                    <TextBlock Style="{StaticResource CardTitle}" Text="Show icon in the notification area" />
+                    <TextBlock Style="{StaticResource Caption}" Text="Right-click it to move the taskbar in one click." />
+                </StackPanel>
+                <CheckBox x:Name="TrayToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                          Click="OnTrayClick" />
+            </Grid>
+        </Border>
+        <Border Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,24,0">
+                    <TextBlock Style="{StaticResource CardTitle}" Text="Keep running when the window is closed" />
+                    <TextBlock Style="{StaticResource Caption}" Text="Closing the window leaves the app in the notification area." />
+                </StackPanel>
+                <CheckBox x:Name="CloseToTrayToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                          Click="OnCloseToTrayClick" />
+            </Grid>
+        </Border>
+
+        <TextBlock Style="{StaticResource SectionTitle}" Text="Undo" />
+        <Border Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,24,0">
+                    <TextBlock Style="{StaticResource CardTitle}" Text="Restore original taskbar" />
+                    <TextBlock x:Name="RestoreCaption" Style="{StaticResource Caption}" />
+                </StackPanel>
+                <Button x:Name="RestoreButton" Grid.Column="1" Content="Restore" VerticalAlignment="Center" Click="OnRestoreClick" />
+            </Grid>
+        </Border>
+
+        <TextBlock Style="{StaticResource SectionTitle}" Text="About" />
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock x:Name="VersionText" Style="{StaticResource CardTitle}" FontWeight="SemiBold" />
+                <TextBlock Style="{StaticResource Caption}" Margin="0,6,0,0"
+                           Text="Moving the Windows 11 taskbar uses the free Windhawk mods &quot;Taskbar on top for Windows 11&quot; and &quot;Vertical Taskbar for Windows 11&quot; by m417z (GPL-3.0). The Windows 10-style taskbar comes from ExplorerPatcher by valinet. Both are separate projects by other authors." />
+                <WrapPanel Margin="0,12,0,0">
+                    <Button Content="Project page" Click="OnProjectClick" Margin="0,0,8,0" />
+                    <Button Content="Windhawk" Click="OnWindhawkClick" Margin="0,0,8,0" />
+                    <Button Content="ExplorerPatcher" Click="OnExplorerPatcherClick" Margin="0,0,8,0" />
+                    <Button Content="Open data folder" Click="OnDataFolderClick" />
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>
