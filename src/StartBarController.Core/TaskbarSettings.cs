@@ -13,8 +13,8 @@ public sealed record TaskbarSetting(
     IReadOnlyList<TaskbarOption> Options,
     int MinBuild = WindowsRelease.Windows11)
 {
-    /// <summary>True for on/off settings (shown as a toggle switch).</summary>
-    public bool IsToggle => Options.Count == 2 && Options[0].Value == 0 && Options[1].Value == 1;
+    /// <summary>True for on/off settings (shown as a toggle switch); other two-value settings get a drop-down.</summary>
+    public bool IsToggle => Options is [{ Value: 0, Label: "Off" }, { Value: 1, Label: "On" }];
 
     public bool IsAvailable(int build) => build >= MinBuild;
 

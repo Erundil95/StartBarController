@@ -4,7 +4,7 @@ Move the Windows taskbar to the **top, left, right or bottom** of the screen, wi
 menu following it, and adjust the rest of the taskbar from one place. On Windows 11 it keeps
 the **real Windows 11 taskbar and start menu**.
 
-![Position page](docs/position.png)
+![Position page](docs/screenshots/position.png)
 
 ## What it does
 
@@ -20,6 +20,14 @@ the **real Windows 11 taskbar and start menu**.
   (or uninstalling) puts it all back.
 - **Light and dark mode:** follows Windows, using the Windows 11 (Fluent) style.
 - **Command line:** `StartBarController --edge top`, and more (see below).
+
+<details>
+<summary>More screenshots</summary>
+
+![Taskbar settings](docs/screenshots/taskbar.png)
+![App settings](docs/screenshots/settings.png)
+
+</details>
 
 ## How the taskbar is moved
 

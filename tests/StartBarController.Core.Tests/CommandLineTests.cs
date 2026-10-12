@@ -37,6 +37,14 @@ public class CommandLineTests
         Assert.Equal(expected, CommandLine.Parse(new[] { arg }).Action);
 
     [Fact]
+    public void OnlyOffOnSettingsAreToggles()
+    {
+        Assert.True(TaskbarSettings.TaskView.IsToggle);
+        Assert.False(TaskbarSettings.Alignment.IsToggle); // Left/Center is a choice, not on/off
+        Assert.False(TaskbarSettings.Search.IsToggle);
+    }
+
+    [Fact]
     public void ParsesElevatedHelper()
     {
         var o = CommandLine.Parse(new[] { "--windhawk-elevated", @"C:\t\r.json" });
