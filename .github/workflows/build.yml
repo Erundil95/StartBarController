@@ -7,8 +7,8 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      print_screenshots:
-        description: Also print the smoke-test screenshots into the log (base64), for environments that can't download artifacts
+      update_screenshots:
+        description: Commit the smoke-test screenshots to docs/screenshots on this branch
         type: boolean
         default: false
 
@@ -57,15 +57,19 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Smoke test exit code $($p.ExitCode)" }
           Get-ChildItem $folder
 
-      - name: Print screenshots
-        if: inputs.print_screenshots
+      - name: Commit screenshots
+        if: inputs.update_screenshots
         shell: pwsh
         run: |
-          foreach ($file in Get-ChildItem out/smoke/*.png) {
-            $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
-            Write-Output "BEGIN-SCREENSHOT $($file.Name)"
-            for ($i = 0; $i -lt $b64.Length; $i += 4000) { Write-Output ("B64 " + $b64.Substring($i, [Math]::Min(4000, $b64.Length - $i))) }
-            Write-Output "END-SCREENSHOT $($file.Name)"
+          New-Item -ItemType Directory -Force docs/screenshots | Out-Null
+          Copy-Item out/smoke/*.png docs/screenshots/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Update screenshots from the CI smoke test [skip ci]"
+            git push origin "HEAD:${{ github.ref_name }}"
           }
 
       - name: Command line
