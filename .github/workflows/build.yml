@@ -91,17 +91,20 @@ jobs:
         with:
           name: StartBarController-Setup
           path: out/installer/*.exe
+          retention-days: 3
 
       - uses: actions/upload-artifact@v4
         with:
           name: StartBarController-portable
           path: out/standalone/StartBarController.exe
+          retention-days: 3
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: smoke-test-screenshots
           path: out/smoke
+          retention-days: 3
 
       - name: Create release
         if: startsWith(github.ref, 'refs/tags/v')
